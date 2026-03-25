@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gangs of Los Santos (2026)</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { overflow: hidden; background-color: #000; color: #e0e0e0; }
+        
+        #map { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; background-color: #000; }
+
+        #sidebar { 
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 350px; 
+            height: 100vh;
+            background-color: rgba(33, 33, 33, 0.95);
+            backdrop-filter: blur(5px);
+            display: flex; 
+            flex-direction: column; 
+            box-shadow: 5px 0 15px rgba(0,0,0,0.8); 
+            z-index: 1000;
+        }
+
+        #list-view { flex-grow: 1; overflow-y: auto; }
+        .sidebar-header { padding: 20px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .sidebar-header h1 { font-size: 18px; color: #fff; }
+        .sidebar-header p { font-size: 12px; color: #aaa; margin-top: 5px; }
+
+        .category-header { 
+            background-color: rgba(0,0,0,0.4); 
+            padding: 12px 20px; 
+            font-size: 13px; 
+            font-weight: bold; 
+            color: #ddd; 
+            border-bottom: 1px solid rgba(255,255,255,0.05); 
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .category-header:hover { background-color: rgba(0,0,0,0.6); }
+        .category-content { display: block; }
+        .category-content.collapsed { display: none; }
+
+        .gang-item { 
+            padding: 15px 20px; 
+            cursor: pointer; 
+            border-bottom: 1px solid rgba(255,255,255,0.05); 
+            display: flex; 
+            align-items: center; 
+            transition: background 0.2s;
+        }
+        .gang-item:hover { background-color: rgba(255,255,255,0.1); }
+        .gang-color-dot { width: 12px; height: 12px; border-radius: 50%; margin-right: 15px; box-shadow: 0 0 5px rgba(0,0,0,0.5); }
+        .gang-name { font-size: 14px; }
+
+        #detail-view { display: none; flex-direction: column; height: 100%; background-color: rgba(255,255,255,0.98); color: #333; }
+        
+        .detail-header { 
+            background-color: #ff9800; 
+            color: #fff; 
+            padding: 15px 20px; 
+            display: flex; 
+            align-items: center; 
+            cursor: pointer;
+        }
+        .detail-header:hover { filter: brightness(0.9); }
+        .back-btn { margin-right: 15px; font-size: 18px; font-weight: bold; }
+        .detail-title-main { font-weight: bold; font-size: 16px; }
+
+        .detail-content { padding: 20px; overflow-y: auto; }
+        .gang-photo { width: 100%; height: 200px; object-fit: cover; border-radius: 8px; margin-bottom: 15px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
+        .detail-label { font-size: 10px; color: #888; text-transform: uppercase; margin-bottom: 5px; margin-top: 15px;}
+        .detail-name { font-size: 18px; font-weight: bold; margin-bottom: 10px; color: #222; }
+        .detail-desc { font-size: 14px; line-height: 1.6; color: #444; }
+    </style>
+</head>
+<body>
+
+    <div id="map"></div>
+
+    <div id="sidebar">
+        <div id="list-view">
+            <div class="sidebar-header">
+                <h1>Gangs of Los Santos (2026)</h1>
+                <p>Southside: AL-ON</p>
+            </div>
+            <div id="categories-container"></div>
+        </div>
+
+        <div id="detail-view">
+            <div class="detail-header" id="detail-top-bar" onclick="showListView()">
+                <span class="back-btn">←</span>
+                <span class="detail-title-main" id="header-gang-name">Wróć</span>
+            </div>
+            <div class="detail-content">
+                <img id="detail-gang-image" class="gang-photo" src="" alt="Zdjęcie gangu">
+                <div class="detail-label">Nazwa Frakcji</div>
+                <div class="detail-name" id="detail-gang-name">Nazwa</div>
+                <div class="detail-label">Opis i Informacje</div>
+                <div class="detail-desc" id="detail-gang-desc">Opis...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const imageBounds = [[0, 0], [8192, 8192]];
+        const maxPanBounds = [[-200, -200], [8392, 8392]];
+
+        const map = L.map('map', {
+            crs: L.CRS.Simple,
+            minZoom: -2,
+            maxZoom: 2,
+            zoomControl: false,
+            maxBounds: maxPanBounds,
+            maxBoundsViscosity: 1.0
+        });
+        
+        L.control.zoom({ position: 'topright' }).addTo(map);
+
+        const imageUrl = 'GTAV_ATLUS_8192x8192.png'; 
+        
+        L.imageOverlay(imageUrl, imageBounds).addTo(map);
+
+        map.setView([1800, 4500], 0);
+
+        const gangsData = [];
+
+        const categoriesContainer = document.getElementById('categories-container');
+        let activePolygon = null;
+
+        const groupedGangs = {};
+        gangsData.forEach(gang => {
+            if (!groupedGangs[gang.category]) groupedGangs[gang.category] = [];
+            groupedGangs[gang.category].push(gang);
+        });
+
+        for (const [categoryName, gangs] of Object.entries(groupedGangs)) {
+            const catHeader = document.createElement('div');
+            catHeader.className = 'category-header';
+            catHeader.innerHTML = `<span>${categoryName}</span> <span>▼</span>`;
+            
+            const catContent = document.createElement('div');
+            catContent.className = 'category-content';
+
+            catHeader.onclick = () => {
+                catContent.classList.toggle('collapsed');
+                catHeader.querySelector('span:last-child').innerText = catContent.classList.contains('collapsed') ? '◀' : '▼';
+            };
+
+            categoriesContainer.appendChild(catHeader);
+            categoriesContainer.appendChild(catContent);
+
+            gangs.forEach(gang => {
+                const polygon = L.polygon(gang.coords, {
+                    color: gang.color, fillColor: gang.color, fillOpacity: 0.4, weight: 2
+                }).addTo(map);
+
+                polygon.on('click', () => {
+                    showDetailView(gang);
+                    highlightPolygon(polygon);
+                });
+
+                const listItem = document.createElement('div');
+                listItem.className = 'gang-item';
+                listItem.innerHTML = `
+                    <div class="gang-color-dot" style="background-color: ${gang.color}"></div>
+                    <div class="gang-name">${gang.name}</div>
+                `;
+                
+                listItem.onclick = () => {
+                    showDetailView(gang);
+                    highlightPolygon(polygon);
+                    map.flyToBounds(polygon.getBounds(), { padding: [50, 50], duration: 1 });
+                };
+
+                catContent.appendChild(listItem);
+            });
+        }
+
+        function showDetailView(gang) {
+            document.getElementById('list-view').style.display = 'none';
+            document.getElementById('detail-view').style.display = 'flex';
+            
+            document.getElementById('header-gang-name').innerText = gang.name;
+            document.getElementById('detail-gang-name').innerText = gang.name;
+            document.getElementById('detail-gang-desc').innerText = gang.desc;
+            document.getElementById('detail-gang-image').src = gang.image;
+            
+            document.getElementById('detail-top-bar').style.backgroundColor = gang.color;
+        }
+
+        function showListView() {
+            document.getElementById('list-view').style.display = 'block';
+            document.getElementById('detail-view').style.display = 'none';
+            
+            if (activePolygon) {
+                activePolygon.setStyle({ fillOpacity: 0.4, weight: 2 });
+            }
+        }
+
+        function highlightPolygon(polygon) {
+            if (activePolygon) activePolygon.setStyle({ fillOpacity: 0.4, weight: 2 });
+            polygon.setStyle({ fillOpacity: 0.7, weight: 4 });
+            activePolygon = polygon;
+        }
+    </script>
+</body>
+</html>
