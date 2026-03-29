@@ -137,13 +137,13 @@
                 category: "Bloods",
                 color: "#cc0000",
                 image: "bounty.png",
-                desc: "Opis gangu Bounty Hunter Watts Bloods...",
+                desc: "Opis gangu Bounty Hunter Watts Bloods.",
                 coords: [
                     [1800, 4400],
                     [1800, 4600],
                     [1700, 4600],
                     [1700, 4400]
-                ] 
+                ]
             }
         ];
 
@@ -173,56 +173,48 @@
             categoriesContainer.appendChild(catContent);
 
             gangs.forEach(gang => {
-                // 1. Ustawienie bardzo delikatnego wyglądu domyślnego
                 const polygon = L.polygon(gang.coords, {
                     color: gang.color, 
                     fillColor: gang.color, 
-                    fillOpacity: 0.15, // Bardzo delikatne wypełnienie
-                    weight: 1,         // Bardzo chuda obramówka
-                    opacity: 0.3       // Delikatna obramówka
+                    fillOpacity: 0.15, 
+                    weight: 1,         
+                    opacity: 0.3       
                 }).addTo(map);
 
-                // 2. Znalezienie środka strefy, aby postawić tam logo
                 const bounds = polygon.getBounds();
                 const center = bounds.getCenter();
 
-                // 3. Dodanie logo jako markera na mapie
                 const gangIcon = L.icon({
-                    iconUrl: gang.image, // Pobiera plik bounty.png
-                    iconSize: [40, 40],  // Rozmiar logo w pikselach [szerokość, wysokość] - możesz to zmienić!
-                    iconAnchor: [20, 20] // Zakotwiczenie (połowa rozmiaru, żeby środek obrazka był w centrum)
+                    iconUrl: gang.image, 
+                    iconSize: [40, 40],  
+                    iconAnchor: [20, 20] 
                 });
                 
                 const marker = L.marker(center, { icon: gangIcon }).addTo(map);
 
-                // 4. Efekt najechania myszką na strefę (mocniejszy czerwony)
                 polygon.on('mouseover', () => {
                     if (activePolygon !== polygon) {
                         polygon.setStyle({ fillOpacity: 0.5, weight: 3, opacity: 0.9 });
                     }
                 });
 
-                // 5. Efekt zjechania myszką ze strefy (powrót do delikatnego)
                 polygon.on('mouseout', () => {
                     if (activePolygon !== polygon) {
                         polygon.setStyle({ fillOpacity: 0.15, weight: 1, opacity: 0.3 });
                     }
                 });
 
-                // Kliknięcie w strefę
                 polygon.on('click', () => {
                     showDetailView(gang);
                     highlightPolygon(polygon);
                 });
 
-                // Kliknięcie w samo logo też powinno działać tak samo
                 marker.on('click', () => {
                     showDetailView(gang);
                     highlightPolygon(polygon);
                     map.flyToBounds(polygon.getBounds(), { padding: [50, 50], duration: 1 });
                 });
 
-                // Element listy w panelu bocznym
                 const listItem = document.createElement('div');
                 listItem.className = 'gang-item';
                 listItem.innerHTML = `
@@ -238,6 +230,7 @@
 
                 catContent.appendChild(listItem);
             });
+        }
 
         function showDetailView(gang) {
             document.getElementById('list-view').style.display = 'none';
@@ -255,18 +248,15 @@
             document.getElementById('list-view').style.display = 'block';
             document.getElementById('detail-view').style.display = 'none';
             
-            // Resetowanie wyglądu odznaczonej strefy do nowych, delikatnych wartości
             if (activePolygon) {
                 activePolygon.setStyle({ fillOpacity: 0.15, weight: 1, opacity: 0.3 });
-                activePolygon = null; // Usuwamy aktywną strefę po powrocie do listy
+                activePolygon = null; 
             }
         }
 
         function highlightPolygon(polygon) {
-            // Resetowanie poprzedniej strefy do delikatnego wyglądu
             if (activePolygon) activePolygon.setStyle({ fillOpacity: 0.15, weight: 1, opacity: 0.3 });
             
-            // Mocny wygląd strefy po jej KLIKNIĘCIU
             polygon.setStyle({ fillOpacity: 0.7, weight: 4, opacity: 1 });
             activePolygon = polygon;
         }
